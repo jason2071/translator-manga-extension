@@ -3,3 +3,4 @@ dist/
 tests/_*.mjs
 *.log
 .DS_Store
+ีui/
