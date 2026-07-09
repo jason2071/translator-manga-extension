@@ -149,7 +149,8 @@ async function enqueue(img: HTMLImageElement, region: CropRegion): Promise<void>
     })) as TranslateResponse | undefined;
 
     if (res?.bubbles?.length) renderBubbles(img, region, res.bubbles);
-    if (res && !res.error) processed.add(key);
+    // mark done unless it errored or the background asked us to retry (empty)
+    if (res && !res.error && !res.retry) processed.add(key);
     else if (res?.error) console.warn('[MangaTranslator]', res.error);
   } catch (e) {
     console.debug('[MangaTranslator] translate failed', e);

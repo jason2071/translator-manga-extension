@@ -74,4 +74,6 @@ export interface TranslateResponse {
   bubbles?: Bubble[];
   error?: string;
   cached?: boolean;
+  /** empty result under the retry limit — content should not mark it done. */
+  retry?: boolean;
 }

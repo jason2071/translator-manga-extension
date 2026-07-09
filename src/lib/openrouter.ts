@@ -12,8 +12,11 @@ function buildPrompt(glossary: Record<string, string>): string {
   const hasGlossary = Object.keys(glossary).length > 0;
   return [
     'You are an OCR + translation engine for comics (manga / manhwa / manhua).',
-    'The image is a crop from a comic page. Find every region that contains text:',
-    'speech bubbles, narration boxes, captions, and sound effects.',
+    'The image is a crop from a comic page. Find EVERY region that contains text:',
+    'speech bubbles, narration boxes, captions, sound effects, AND game-style',
+    'system/status windows (light text on dark or coloured panels, e.g. "SKILL',
+    'LEVEL HAS INCREASED"). Include stylized onomatopoeia / sound effects drawn',
+    'over the artwork, in ANY language, even when the dialogue is in another.',
     'For each region return an object with:',
     '- "bbox": [x, y, w, h] normalized to THIS image, each 0..1, origin top-left.',
     '- "source_text": the exact original text.',

@@ -54,6 +54,10 @@ const sem = new Semaphore(3);
 
 const stats: Stats = { requests: 0, cacheHits: 0 };
 
+// bounded retries for images that came back with zero bubbles
+const emptyAttempts = new Map<string, number>();
+const MAX_EMPTY_ATTEMPTS = 2;
+
 // ---- image acquisition + crop ----
 
 async function fetchBitmap(src: string): Promise<ImageBitmap> {
@@ -194,6 +198,16 @@ async function handleTranslate(
       const tm = await getTM(b.source_text);
       if (tm) b.translation_th = tm.th;
       else await putTM(b.source_text, b.translation_th, b.source_lang);
+    }
+
+    // An empty result may be a transient miss (model overlooked stylized/dark
+    // text). Retry a couple of times before caching "no text" permanently.
+    if (bubbles.length === 0) {
+      const n = (emptyAttempts.get(msg.imgKey) ?? 0) + 1;
+      emptyAttempts.set(msg.imgKey, n);
+      if (n < MAX_EMPTY_ATTEMPTS) return { bubbles: [], retry: true };
+    } else {
+      emptyAttempts.delete(msg.imgKey);
     }
 
     const result: ImageResult = { imgKey: msg.imgKey, bubbles, ts: Date.now() };
