@@ -74,9 +74,9 @@ function positionItem(item: RenderItem): void {
   const scaleX = rect.width / img.naturalWidth;
   const scaleY = rect.height / img.naturalHeight;
 
-  // Models return a tight bbox around the glyphs; pad it so the fill covers the
-  // whole bubble and the original text doesn't peek around the edges.
-  const PAD = 0.18;
+  // Models return a tight bbox around the glyphs; pad it slightly so the fill
+  // covers the text without swallowing the surrounding artwork.
+  const PAD = 0.06;
   bubbles.forEach((b, i) => {
     const el = boxes[i];
     const bx = region.sx + b.bbox[0] * region.sw;
