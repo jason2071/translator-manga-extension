@@ -140,7 +140,7 @@ export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
       },
       body: {
         model: s.model,
-        max_tokens: 1024,
+        max_tokens: 2048,
         messages: [
           {
             role: 'user',
@@ -220,7 +220,7 @@ export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
         messages: [{ role: 'user', content: prompt, images: [b64] }],
         stream: false,
         format: 'json',
-        options: { temperature: 0.2 },
+        options: { temperature: 0.2, num_predict: 2048 },
       },
     }),
     extractContent: (json) => json?.message?.content ?? '',

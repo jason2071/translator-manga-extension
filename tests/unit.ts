@@ -60,7 +60,23 @@ console.log('parseBubbles');
   } catch {
     threw = true;
   }
-  ok('malformed JSON throws', threw);
+  ok('garbage with no brackets throws (retryable)', threw);
+
+  // salvage: truncated wrapper — outer {"bubbles":[ never closes, last bubble cut
+  const truncated = parseBubbles(
+    '{"bubbles":[{"bbox":[0,0,0.3,0.2],"source_text":"バナナ","source_lang":"ja","translation_th":"กล้วย"},{"bbox":[0.1,0.3,0.4,0.2],"source_text":"バナナ","source_lang":"ja","translation_th":"กล้วย!!!"},{"bbox":[0.2,0.5',
+  );
+  eq('salvages complete bubbles from a truncated response', truncated.length, 2);
+  eq('salvaged first translation', truncated[0].translation_th, 'กล้วย');
+
+  // salvage: prose wrapped around multiple bare objects
+  const prosey2 = parseBubbles(
+    'Sure! Here are the bubbles:\n{"bbox":[0,0,1,1],"source_text":"x","source_lang":"ja","translation_th":"ก"}\nand\n{"bbox":[0,0,1,1],"source_text":"y","source_lang":"ja","translation_th":"ข"}\nHope this helps.',
+  );
+  eq('salvages bare objects from prose', prosey2.length, 2);
+
+  // a valid empty result must NOT throw and must not be salvaged into junk
+  eq('empty wrapper yields no bubbles, no throw', parseBubbles('{"bubbles": []}').length, 0);
 }
 
 console.log('hashString / urlRegionKey');

@@ -50,23 +50,68 @@ export async function translateImage(
   return parseBubbles(provider.extractContent(json));
 }
 
-/** Tolerant parser: unwraps code fences, falls back to the first JSON block. */
+/** Pull every complete, balanced {...} object (at any nesting depth) out of a
+ *  string, tolerating strings/escapes. Complete inner objects survive even when
+ *  an outer wrapper is truncated — the key to salvaging cut-off model output. */
+function extractObjects(text: string): any[] {
+  const objs: any[] = [];
+  const stack: number[] = [];
+  let inStr = false;
+  let esc = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (ch === '\\') esc = true;
+      else if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') inStr = true;
+    else if (ch === '{') stack.push(i);
+    else if (ch === '}') {
+      const start = stack.pop();
+      if (start !== undefined) {
+        try {
+          objs.push(JSON.parse(text.slice(start, i + 1)));
+        } catch {
+          /* skip malformed fragment */
+        }
+      }
+    }
+  }
+  return objs;
+}
+
+function collectRaw(text: string): any[] {
+  try {
+    const data = JSON.parse(text);
+    if (Array.isArray(data)) return data;
+    if (Array.isArray((data as any)?.bubbles)) return (data as any).bubbles;
+    if (data && typeof data === 'object') return [data];
+  } catch {
+    /* fall through to salvage */
+  }
+  const objs = extractObjects(text);
+  // Prefer complete {bubbles:[...]} wrappers; otherwise use bubble-like objects
+  // (handles a truncated wrapper by keeping its complete inner bubbles).
+  const wrappers = objs.filter((o) => Array.isArray(o?.bubbles));
+  if (wrappers.length) return wrappers.flatMap((o) => o.bubbles);
+  return objs.filter((o) => o && (Array.isArray(o.bbox) || typeof o.translation_th === 'string'));
+}
+
+/** Tolerant parser: unwraps code fences, whole-parses, then salvages objects. */
 export function parseBubbles(content: string): Bubble[] {
-  let text = content.trim();
+  let text = (content ?? '').trim();
   const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fence) text = fence[1].trim();
 
-  let data: unknown;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    const m = text.match(/[[{][\s\S]*[\]}]/);
-    if (!m) throw new Error('Malformed JSON from model');
-    data = JSON.parse(m[0]);
+  const raw = collectRaw(text);
+  // Only a total absence of any parseable JSON is a real failure (retryable).
+  if (raw.length === 0 && text.length > 0 && !/[[{]/.test(text)) {
+    throw new Error('Malformed JSON from model');
   }
 
-  const arr: any[] = Array.isArray(data) ? data : ((data as any)?.bubbles ?? []);
-  return arr
+  return raw
     .filter(
       (b) =>
         b &&
