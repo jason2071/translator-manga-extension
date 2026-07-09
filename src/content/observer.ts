@@ -17,6 +17,7 @@ const CHUNK_MARGIN = 300; // px — prefetch chunks this far outside the viewpor
 
 const processed = new Set<string>();
 const inflight = new Set<string>();
+const wired = new WeakSet<HTMLImageElement>();
 
 let io: IntersectionObserver;
 let mo: MutationObserver;
@@ -37,10 +38,21 @@ export function initObserver(): void {
   mo.observe(document.documentElement, { childList: true, subtree: true });
   window.addEventListener('scroll', scheduleScan, { passive: true, capture: true });
   window.addEventListener('resize', scheduleScan, { passive: true });
+  // Safety net: lazy-loaded images decode after they scroll in, and nothing
+  // else re-fires. Periodically re-scan (cheap — processed keys short-circuit).
+  setInterval(scheduleScan, 1500);
 }
 
 function observeAll(): void {
-  document.querySelectorAll('img').forEach((img) => io.observe(img));
+  document.querySelectorAll('img').forEach((img) => {
+    io.observe(img);
+    // A just-decoded lazy image is already in-viewport, so IO won't re-fire;
+    // its own load event is the trigger to (re)scan and translate it.
+    if (!wired.has(img)) {
+      wired.add(img);
+      img.addEventListener('load', scheduleScan, { passive: true } as AddEventListenerOptions);
+    }
+  });
 }
 
 function scheduleScan(): void {
