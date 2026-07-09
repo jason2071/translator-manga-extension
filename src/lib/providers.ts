@@ -1,0 +1,159 @@
+// Vision-provider registry. Each provider knows how to build its own request
+// (endpoint + auth + body) and pull the text content out of its response. The
+// translate layer stays provider-agnostic; parsing the JSON of bubbles is shared.
+
+import type { ProviderId, Settings } from './types';
+
+export interface ProviderRequest {
+  url: string;
+  headers: Record<string, string>;
+  body: unknown;
+}
+
+export interface ProviderMeta {
+  id: ProviderId;
+  label: string;
+  defaultModel: string;
+  suggestedModels: string[];
+  keyHint: string;
+  buildRequest(base64Png: string, prompt: string, settings: Settings): ProviderRequest;
+  extractContent(json: any): string;
+}
+
+// --- OpenAI-compatible shape (shared by OpenRouter + OpenAI) ---
+function openaiMessages(prompt: string, base64: string) {
+  return [
+    {
+      role: 'user',
+      content: [
+        { type: 'text', text: prompt },
+        { type: 'image_url', image_url: { url: `data:image/png;base64,${base64}` } },
+      ],
+    },
+  ];
+}
+function openaiExtract(json: any): string {
+  return json?.choices?.[0]?.message?.content ?? '';
+}
+
+export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
+  openrouter: {
+    id: 'openrouter',
+    label: 'OpenRouter',
+    defaultModel: 'google/gemini-2.5-flash',
+    suggestedModels: [
+      'google/gemini-2.5-flash',
+      'google/gemini-2.5-flash-lite',
+      'anthropic/claude-3.5-haiku',
+      'openai/gpt-4o-mini',
+      'openai/gpt-4o',
+    ],
+    keyHint: 'sk-or-v1-…  (openrouter.ai/keys)',
+    buildRequest: (b64, prompt, s) => ({
+      url: 'https://openrouter.ai/api/v1/chat/completions',
+      headers: {
+        Authorization: `Bearer ${s.apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://github.com/manga-realtime-translator',
+        'X-Title': 'Manga Realtime Translator',
+      },
+      body: {
+        model: s.model,
+        messages: openaiMessages(prompt, b64),
+        response_format: { type: 'json_object' },
+        temperature: 0.2,
+        reasoning: { enabled: false }, // no thinking → lower latency
+      },
+    }),
+    extractContent: openaiExtract,
+  },
+
+  openai: {
+    id: 'openai',
+    label: 'OpenAI',
+    defaultModel: 'gpt-4o-mini',
+    suggestedModels: ['gpt-4o-mini', 'gpt-4o'],
+    keyHint: 'sk-…  (platform.openai.com/api-keys)',
+    buildRequest: (b64, prompt, s) => ({
+      url: 'https://api.openai.com/v1/chat/completions',
+      headers: {
+        Authorization: `Bearer ${s.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: {
+        model: s.model,
+        messages: openaiMessages(prompt, b64),
+        response_format: { type: 'json_object' },
+        temperature: 0.2,
+      },
+    }),
+    extractContent: openaiExtract,
+  },
+
+  anthropic: {
+    id: 'anthropic',
+    label: 'Anthropic (Claude)',
+    defaultModel: 'claude-3-5-haiku-latest',
+    suggestedModels: ['claude-3-5-haiku-latest', 'claude-3-5-sonnet-latest'],
+    keyHint: 'sk-ant-…  (console.anthropic.com)',
+    buildRequest: (b64, prompt, s) => ({
+      url: 'https://api.anthropic.com/v1/messages',
+      headers: {
+        'x-api-key': s.apiKey,
+        'anthropic-version': '2023-06-01',
+        // permit CORS from the extension origin
+        'anthropic-dangerous-direct-browser-access': 'true',
+        'Content-Type': 'application/json',
+      },
+      body: {
+        model: s.model,
+        max_tokens: 1024,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: prompt },
+              { type: 'image', source: { type: 'base64', media_type: 'image/png', data: b64 } },
+            ],
+          },
+        ],
+      },
+    }),
+    extractContent: (json) =>
+      Array.isArray(json?.content)
+        ? json.content
+            .filter((c: any) => c.type === 'text')
+            .map((c: any) => c.text)
+            .join('')
+        : '',
+  },
+
+  gemini: {
+    id: 'gemini',
+    label: 'Google Gemini',
+    defaultModel: 'gemini-2.5-flash',
+    suggestedModels: ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'],
+    keyHint: 'AIza…  (aistudio.google.com/apikey)',
+    buildRequest: (b64, prompt, s) => {
+      const generationConfig: any = { responseMimeType: 'application/json', temperature: 0.2 };
+      // thinkingConfig only exists on 2.5 models; sending it to 2.0 errors.
+      if (/2\.5/.test(s.model)) generationConfig.thinkingConfig = { thinkingBudget: 0 };
+      return {
+        url: `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(s.model)}:generateContent`,
+        headers: { 'x-goog-api-key': s.apiKey, 'Content-Type': 'application/json' },
+        body: {
+          contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: 'image/png', data: b64 } }] }],
+          generationConfig,
+        },
+      };
+    },
+    extractContent: (json) => {
+      const parts = json?.candidates?.[0]?.content?.parts;
+      return Array.isArray(parts) ? parts.map((p: any) => p.text ?? '').join('') : '';
+    },
+  },
+};
+
+export function getProvider(id: ProviderId): ProviderMeta {
+  return PROVIDERS[id] ?? PROVIDERS.openrouter;
+}

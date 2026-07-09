@@ -1,0 +1,20 @@
+{
+  "name": "manga-realtime-translator",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Chrome MV3 extension that overlays Thai translations on manga/manhwa/manhua as you scroll, using a Vision LLM via OpenRouter with two-layer caching and a user-drawn translation scope.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "esbuild tests/unit.ts --bundle --platform=node --format=esm --outfile=tests/_unit.mjs && node tests/_unit.mjs && esbuild tests/live.ts --bundle --platform=node --format=esm --outfile=tests/_live.mjs && node tests/_live.mjs"
+  },
+  "devDependencies": {
+    "@crxjs/vite-plugin": "^2.0.0-beta.28",
+    "@types/chrome": "^0.0.278",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10"
+  }
+}

@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Manga Translator</title>
+    <style>
+      :root {
+        --pink: #ff3d7f;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        width: 300px;
+        margin: 0;
+        padding: 14px;
+        font-family: system-ui, sans-serif;
+        font-size: 13px;
+        color: #1a1a1a;
+        background: #fff;
+      }
+      h1 {
+        font-size: 15px;
+        margin: 0 0 10px;
+      }
+      label {
+        display: block;
+        margin: 8px 0 4px;
+        font-weight: 600;
+      }
+      input[type='text'],
+      input[type='password'],
+      select {
+        width: 100%;
+        padding: 6px 8px;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        font-size: 13px;
+        background: #fff;
+      }
+      .check {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-weight: 600;
+        margin: 10px 0;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        margin-top: 8px;
+      }
+      button {
+        flex: 1;
+        padding: 7px 6px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        background: #f5f5f5;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #ececec;
+      }
+      button.primary {
+        background: var(--pink);
+        color: #fff;
+        border-color: var(--pink);
+      }
+      #stats {
+        margin-top: 10px;
+        font-size: 11px;
+        color: #666;
+      }
+      #status {
+        margin-top: 10px;
+        font-size: 11px;
+        min-height: 14px;
+        color: #c0392b;
+      }
+      .hint {
+        font-size: 11px;
+        color: #888;
+        margin-top: 2px;
+        font-weight: 400;
+      }
+      a {
+        color: var(--pink);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Manga Realtime Translator</h1>
+
+    <label for="provider">Provider</label>
+    <select id="provider"></select>
+
+    <label for="key">API key</label>
+    <input id="key" type="password" placeholder="paste key…" autocomplete="off" />
+    <div class="hint" id="keyHint"></div>
+
+    <label for="model">Model</label>
+    <input id="model" type="text" list="models" placeholder="model slug…" autocomplete="off" />
+    <datalist id="models"></datalist>
+    <div class="hint">Pick a suggestion or type any vision model for this provider.</div>
+
+    <div class="check">
+      <input id="enabled" type="checkbox" />
+      <label for="enabled" style="margin: 0">Translation enabled</label>
+    </div>
+
+    <div class="row">
+      <button id="draw" class="primary">Draw scope</button>
+      <button id="reset">Reset scope</button>
+    </div>
+    <div class="row">
+      <button id="rerun">Re-translate</button>
+      <button id="toggleOrig">Show / hide</button>
+    </div>
+    <div class="row">
+      <button id="clear">Clear cache</button>
+    </div>
+
+    <div id="status"></div>
+    <div id="stats"></div>
+
+    <script type="module" src="./popup.ts"></script>
+  </body>
+</html>
