@@ -38,6 +38,11 @@ export async function translateImage(
   const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
+    if (provider.id === 'ollama' && res.status === 403) {
+      throw new Error(
+        'Ollama 403 — the extension origin is blocked. Restart Ollama with OLLAMA_ORIGINS=* (see README).',
+      );
+    }
     throw new Error(`${provider.label} ${res.status}: ${text.slice(0, 300)}`);
   }
 
