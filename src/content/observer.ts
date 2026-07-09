@@ -110,10 +110,12 @@ function evaluateImage(img: HTMLImageElement, scope: Rect): void {
       enqueue(img, { sx: sxNat, sy: syNat, sw: swNat, sh: shNat });
     }
   } else {
-    // paged / sliced panel: translate the FULL image height once (scope filters
-    // horizontally + acts as an on/off gate). Using the whole height keeps the
-    // cache key independent of scroll position, so a panel scrolling through the
-    // scope isn't re-translated into overlapping boxes.
+    // paged / sliced panel: only when near the viewport, so a slow model spends
+    // its queue on what you're actually looking at, not far-off panels.
+    if (rect.bottom < -CHUNK_MARGIN || rect.top > window.innerHeight + CHUNK_MARGIN) return;
+    // translate the FULL image height once (scope filters horizontally + acts as
+    // an on/off gate). Whole height keeps the cache key independent of scroll, so
+    // a panel scrolling through the scope isn't re-translated into overlapping boxes.
     enqueue(img, { sx: sxNat, sy: 0, sw: swNat, sh: img.naturalHeight });
   }
 }
