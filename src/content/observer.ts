@@ -98,13 +98,11 @@ function evaluateImage(img: HTMLImageElement, scope: Rect): void {
       enqueue(img, { sx: sxNat, sy: syNat, sw: swNat, sh: shNat });
     }
   } else {
-    // paged manga: honour the full scope (vertical too).
-    const ot = Math.max(rect.top, scope.top);
-    const ob = Math.min(rect.bottom, scope.bottom);
-    if (ob - ot < MIN_REGION) return;
-    const syNat = Math.max(0, Math.round((ot - rect.top) * scaleY));
-    const shNat = Math.round((ob - ot) * scaleY);
-    enqueue(img, { sx: sxNat, sy: syNat, sw: swNat, sh: shNat });
+    // paged / sliced panel: translate the FULL image height once (scope filters
+    // horizontally + acts as an on/off gate). Using the whole height keeps the
+    // cache key independent of scroll position, so a panel scrolling through the
+    // scope isn't re-translated into overlapping boxes.
+    enqueue(img, { sx: sxNat, sy: 0, sw: swNat, sh: img.naturalHeight });
   }
 }
 

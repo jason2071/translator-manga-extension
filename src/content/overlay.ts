@@ -14,6 +14,36 @@ let root: HTMLDivElement;
 const items: RenderItem[] = [];
 let showOriginal = false;
 
+type NatRect = [number, number, number, number]; // x, y, w, h in image natural px
+
+export function bubbleNatRect(region: CropRegion, b: Bubble): NatRect {
+  return [
+    region.sx + b.bbox[0] * region.sw,
+    region.sy + b.bbox[1] * region.sh,
+    b.bbox[2] * region.sw,
+    b.bbox[3] * region.sh,
+  ];
+}
+
+// Overlap as a fraction of the smaller box — catches the same bubble detected in
+// two overlapping crops (chunk boundaries / re-scans) so it isn't drawn twice.
+export function overlapFraction(a: NatRect, b: NatRect): number {
+  const ix = Math.max(0, Math.min(a[0] + a[2], b[0] + b[2]) - Math.max(a[0], b[0]));
+  const iy = Math.max(0, Math.min(a[1] + a[3], b[1] + b[3]) - Math.max(a[1], b[1]));
+  const inter = ix * iy;
+  const minArea = Math.min(a[2] * a[3], b[2] * b[3]) || 1;
+  return inter / minArea;
+}
+
+function existingRectsFor(img: HTMLImageElement): NatRect[] {
+  const out: NatRect[] = [];
+  for (const it of items) {
+    if (it.img !== img) continue;
+    for (const b of it.bubbles) out.push(bubbleNatRect(it.region, b));
+  }
+  return out;
+}
+
 export function initOverlay(): void {
   root = document.createElement('div');
   root.id = '__mt_overlay_root';
@@ -30,7 +60,17 @@ export function initOverlay(): void {
 }
 
 export function renderBubbles(img: HTMLImageElement, region: CropRegion, bubbles: Bubble[]): void {
-  const boxes = bubbles.map((b) => {
+  // drop bubbles that overlap something already drawn on this image
+  const existing = existingRectsFor(img);
+  const fresh = bubbles.filter((b) => {
+    const r = bubbleNatRect(region, b);
+    if (existing.some((e) => overlapFraction(r, e) > 0.5)) return false;
+    existing.push(r);
+    return true;
+  });
+  if (!fresh.length) return;
+
+  const boxes = fresh.map((b) => {
     const el = document.createElement('div');
     el.className = '__mt_bubble';
     Object.assign(el.style, {
@@ -38,9 +78,10 @@ export function renderBubbles(img: HTMLImageElement, region: CropRegion, bubbles
       boxSizing: 'border-box',
       background: '#ffffff',
       color: '#111',
-      border: '1px solid rgba(0,0,0,0.15)',
-      borderRadius: '6px',
-      padding: '2px 4px',
+      // no border: a white box merges cleanly into a white speech bubble
+      border: 'none',
+      borderRadius: '4px',
+      padding: '1px 3px',
       overflow: 'hidden',
       display: 'flex',
       alignItems: 'center',
@@ -58,7 +99,7 @@ export function renderBubbles(img: HTMLImageElement, region: CropRegion, bubbles
     root.appendChild(el);
     return el;
   });
-  const item: RenderItem = { img, region, bubbles, boxes };
+  const item: RenderItem = { img, region, bubbles: fresh, boxes };
   items.push(item);
   positionItem(item);
 }

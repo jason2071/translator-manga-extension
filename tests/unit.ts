@@ -5,6 +5,7 @@ import { parseBubbles } from '../src/lib/openrouter';
 import { hashString, urlRegionKey, dHash, normalizeText } from '../src/lib/hash';
 import { isTall, chunkHeight, planVerticalChunks } from '../src/lib/tiling';
 import { PROVIDERS, getProvider } from '../src/lib/providers';
+import { bubbleNatRect, overlapFraction } from '../src/content/overlay';
 import type { Settings } from '../src/lib/types';
 
 let pass = 0;
@@ -150,6 +151,25 @@ console.log('\n--- webtoon tiling ---');
 
   // stability: identical inputs -> identical boundaries (=> stable cache keys)
   eq('deterministic boundaries', planVerticalChunks(W, H), planVerticalChunks(W, H));
+}
+
+console.log('\n--- overlay dedupe geometry ---');
+{
+  // bbox is normalized to the crop; map to absolute natural px
+  const region = { sx: 100, sy: 50, sw: 400, sh: 300 };
+  const b = (x: number, y: number, w: number, h: number) => ({
+    bbox: [x, y, w, h] as [number, number, number, number],
+    source_text: 's',
+    source_lang: 'ja',
+    translation_th: 'ก',
+  });
+  eq('nat rect mapping', bubbleNatRect(region, b(0.25, 0.5, 0.5, 0.25)), [200, 200, 200, 75]);
+
+  const A: [number, number, number, number] = [0, 0, 100, 100];
+  eq('identical boxes fully overlap', overlapFraction(A, [0, 0, 100, 100]), 1);
+  ok('90% shifted overlap counts as duplicate', overlapFraction(A, [10, 10, 100, 100]) > 0.5);
+  eq('disjoint boxes do not overlap', overlapFraction(A, [200, 200, 50, 50]), 0);
+  ok('small box inside big box = full overlap of the small one', overlapFraction(A, [10, 10, 20, 20]) === 1);
 }
 
 console.log('\n--- provider request builders ---');
