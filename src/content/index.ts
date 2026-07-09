@@ -16,6 +16,16 @@ function scheduleReposition(): void {
 }
 
 async function main(): Promise<void> {
+  // After an extension reload, this stale content script's chrome.* calls reject
+  // with "Extension context invalidated". Silence that noise (a page reload
+  // replaces this script with the new build).
+  window.addEventListener('unhandledrejection', (e) => {
+    const msg = String((e.reason && e.reason.message) || e.reason || '');
+    if (/Extension context invalidated|message port closed|receiving end does not exist/i.test(msg)) {
+      e.preventDefault();
+    }
+  });
+
   initOverlay();
   await initScope();
   initObserver();

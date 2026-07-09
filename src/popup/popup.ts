@@ -75,10 +75,15 @@ async function refreshModels(): Promise<void> {
   try {
     const models = await p.listModels(s);
     if (models.length) {
+      // if the current slug isn't actually available, jump to a real one
+      if (!models.includes(chosenModel)) {
+        chosenModel = models[0];
+        await save();
+      }
       setModelOptions(models);
       setStatus(`${models.length} models available`);
     } else {
-      setStatus('No models returned — using suggestions.');
+      setStatus('No usable models found — install one (e.g. ollama pull llava) or use Custom.');
     }
   } catch (e: any) {
     setStatus(`Model list unavailable (${e?.message ?? e}) — using suggestions.`);

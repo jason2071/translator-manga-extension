@@ -48,6 +48,16 @@ async function getJson(url: string, headers: Record<string, string> = {}): Promi
   return r.json();
 }
 
+async function postJson(url: string, body: unknown, headers: Record<string, string> = {}): Promise<any> {
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(`${r.status}`);
+  return r.json();
+}
+
 export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
   openrouter: {
     id: 'openrouter',
@@ -209,7 +219,8 @@ export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
     id: 'ollama',
     label: 'Ollama (local)',
     defaultModel: 'llama3.2-vision',
-    suggestedModels: ['llama3.2-vision', 'llava', 'minicpm-v', 'qwen2.5vl'],
+    // no static suggestions: only actually-installed vision models should show
+    suggestedModels: [],
     keyHint: 'no key — run Ollama locally; set OLLAMA_ORIGINS=* so the extension can reach it',
     requiresKey: false,
     buildRequest: (b64, prompt, s) => ({
@@ -224,10 +235,22 @@ export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
       },
     }),
     extractContent: (json) => json?.message?.content ?? '',
-    // the actual models installed on this machine
+    // only the installed models that can actually see images (OCR the panel)
     listModels: async () => {
-      const j = await getJson('http://localhost:11434/api/tags');
-      return (j.models ?? []).map((m: any) => m.name).filter(Boolean).sort();
+      const tags = await getJson('http://localhost:11434/api/tags');
+      const names: string[] = (tags.models ?? []).map((m: any) => m.name).filter(Boolean);
+      const checked = await Promise.all(
+        names.map(async (name) => {
+          try {
+            const show = await postJson('http://localhost:11434/api/show', { model: name });
+            return (show.capabilities ?? []).includes('vision') ? name : null;
+          } catch {
+            return name; // can't determine (older Ollama) — keep it
+          }
+        }),
+      );
+      const vision = checked.filter((n): n is string => !!n);
+      return (vision.length ? vision : names).sort();
     },
   },
 };

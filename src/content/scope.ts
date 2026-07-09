@@ -15,9 +15,13 @@ const px = () => ({ W: window.innerWidth, H: window.innerHeight });
 const HANDLES = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'] as const;
 
 export async function initScope(): Promise<void> {
-  const stored = await chrome.storage.local.get(storageKey());
-  const saved = stored[storageKey()] as ScopeBox | undefined;
-  if (saved) scope = saved;
+  try {
+    const stored = await chrome.storage.local.get(storageKey());
+    const saved = stored[storageKey()] as ScopeBox | undefined;
+    if (saved) scope = saved;
+  } catch {
+    /* storage unavailable (context invalidated) — use default scope */
+  }
   buildBox();
   applyScope();
   window.addEventListener('resize', applyScope, { passive: true });
@@ -101,7 +105,11 @@ function applyScope(): void {
 }
 
 async function persist(): Promise<void> {
-  await chrome.storage.local.set({ [storageKey()]: scope });
+  try {
+    await chrome.storage.local.set({ [storageKey()]: scope });
+  } catch {
+    /* extension context gone; ignore */
+  }
 }
 
 function enableMove(): void {

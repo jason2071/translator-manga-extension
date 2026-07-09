@@ -107,6 +107,7 @@ function evaluateImage(img: HTMLImageElement, scope: Rect): void {
 }
 
 async function enqueue(img: HTMLImageElement, region: CropRegion): Promise<void> {
+  if (!chrome.runtime?.id) return; // extension reloaded — stale content script
   const src = img.currentSrc || img.src;
   const key = urlRegionKey(src, region);
   if (processed.has(key) || inflight.has(key)) return;
