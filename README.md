@@ -22,6 +22,10 @@ Vision LLM (via OpenRouter) and caches everything so nothing is translated twice
   `OpenRouter · google/gemini-2.5-flash` (cheap + fast + strong multilingual OCR).
   For Ollama, run a local vision model (`ollama run llama3.2-vision`) and start the
   server with `OLLAMA_ORIGINS=*` so the extension can reach `localhost:11434`.
+  Switching provider (or entering a key) **auto-refreshes the model list** from
+  that provider's API — Ollama shows your locally installed models, OpenRouter
+  lists its vision models — falling back to the built-in suggestions if the fetch
+  fails.
 - **Webtoon aware** — long vertical strips are tiled into fixed chunks and
   translated progressively as you scroll; paged manga uses the full scope box.
 

@@ -1,6 +1,7 @@
 // Vision-provider registry. Each provider knows how to build its own request
-// (endpoint + auth + body) and pull the text content out of its response. The
-// translate layer stays provider-agnostic; parsing the JSON of bubbles is shared.
+// (endpoint + auth + body), pull the text content out of its response, and list
+// the models actually available to the user. The translate layer stays
+// provider-agnostic; parsing the JSON of bubbles is shared.
 
 import type { ProviderId, Settings } from './types';
 
@@ -20,6 +21,9 @@ export interface ProviderMeta {
   requiresKey: boolean;
   buildRequest(base64Png: string, prompt: string, settings: Settings): ProviderRequest;
   extractContent(json: any): string;
+  /** Fetch the live model list for this provider. Throws on failure; callers
+   *  fall back to suggestedModels. */
+  listModels(settings: Settings): Promise<string[]>;
 }
 
 // --- OpenAI-compatible shape (shared by OpenRouter + OpenAI) ---
@@ -36,6 +40,12 @@ function openaiMessages(prompt: string, base64: string) {
 }
 function openaiExtract(json: any): string {
   return json?.choices?.[0]?.message?.content ?? '';
+}
+
+async function getJson(url: string, headers: Record<string, string> = {}): Promise<any> {
+  const r = await fetch(url, { headers });
+  if (!r.ok) throw new Error(`${r.status}`);
+  return r.json();
 }
 
 export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
@@ -65,10 +75,21 @@ export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
         messages: openaiMessages(prompt, b64),
         response_format: { type: 'json_object' },
         temperature: 0.2,
-        reasoning: { enabled: false }, // no thinking → lower latency
+        reasoning: { enabled: false },
       },
     }),
     extractContent: openaiExtract,
+    // public endpoint, key optional; keep only vision-capable models
+    listModels: async (s) => {
+      const j = await getJson(
+        'https://openrouter.ai/api/v1/models',
+        s.apiKey ? { Authorization: `Bearer ${s.apiKey}` } : {},
+      );
+      return (j.data ?? [])
+        .filter((m: any) => (m.architecture?.input_modalities ?? []).includes('image'))
+        .map((m: any) => m.id)
+        .sort();
+    },
   },
 
   openai: {
@@ -80,10 +101,7 @@ export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
     requiresKey: true,
     buildRequest: (b64, prompt, s) => ({
       url: 'https://api.openai.com/v1/chat/completions',
-      headers: {
-        Authorization: `Bearer ${s.apiKey}`,
-        'Content-Type': 'application/json',
-      },
+      headers: { Authorization: `Bearer ${s.apiKey}`, 'Content-Type': 'application/json' },
       body: {
         model: s.model,
         messages: openaiMessages(prompt, b64),
@@ -92,6 +110,17 @@ export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
       },
     }),
     extractContent: openaiExtract,
+    listModels: async (s) => {
+      if (!s.apiKey) throw new Error('API key required to list models');
+      const j = await getJson('https://api.openai.com/v1/models', {
+        Authorization: `Bearer ${s.apiKey}`,
+      });
+      // the list has no vision flag; keep the GPT-4o/4.1/5 families that see images
+      return (j.data ?? [])
+        .map((m: any) => m.id)
+        .filter((id: string) => /gpt-4o|gpt-4\.1|gpt-5|o\d/.test(id))
+        .sort();
+    },
   },
 
   anthropic: {
@@ -106,7 +135,6 @@ export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
       headers: {
         'x-api-key': s.apiKey,
         'anthropic-version': '2023-06-01',
-        // permit CORS from the extension origin
         'anthropic-dangerous-direct-browser-access': 'true',
         'Content-Type': 'application/json',
       },
@@ -131,6 +159,15 @@ export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
             .map((c: any) => c.text)
             .join('')
         : '',
+    listModels: async (s) => {
+      if (!s.apiKey) throw new Error('API key required to list models');
+      const j = await getJson('https://api.anthropic.com/v1/models?limit=100', {
+        'x-api-key': s.apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      });
+      return (j.data ?? []).map((m: any) => m.id);
+    },
   },
 
   gemini: {
@@ -142,7 +179,6 @@ export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
     requiresKey: true,
     buildRequest: (b64, prompt, s) => {
       const generationConfig: any = { responseMimeType: 'application/json', temperature: 0.2 };
-      // thinkingConfig only exists on 2.5 models; sending it to 2.0 errors.
       if (/2\.5/.test(s.model)) generationConfig.thinkingConfig = { thinkingBudget: 0 };
       return {
         url: `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(s.model)}:generateContent`,
@@ -157,6 +193,16 @@ export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
       const parts = json?.candidates?.[0]?.content?.parts;
       return Array.isArray(parts) ? parts.map((p: any) => p.text ?? '').join('') : '';
     },
+    listModels: async (s) => {
+      if (!s.apiKey) throw new Error('API key required to list models');
+      const j = await getJson('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', {
+        'x-goog-api-key': s.apiKey,
+      });
+      return (j.models ?? [])
+        .filter((m: any) => (m.supportedGenerationMethods ?? []).includes('generateContent'))
+        .map((m: any) => String(m.name).replace(/^models\//, ''))
+        .filter((id: string) => id.includes('gemini'));
+    },
   },
 
   ollama: {
@@ -167,7 +213,6 @@ export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
     keyHint: 'no key — run Ollama locally; set OLLAMA_ORIGINS=* so the extension can reach it',
     requiresKey: false,
     buildRequest: (b64, prompt, s) => ({
-      // native chat endpoint: images are raw base64 (no data: prefix)
       url: 'http://localhost:11434/api/chat',
       headers: { 'Content-Type': 'application/json' },
       body: {
@@ -179,6 +224,11 @@ export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
       },
     }),
     extractContent: (json) => json?.message?.content ?? '',
+    // the actual models installed on this machine
+    listModels: async () => {
+      const j = await getJson('http://localhost:11434/api/tags');
+      return (j.models ?? []).map((m: any) => m.name).filter(Boolean).sort();
+    },
   },
 };
 

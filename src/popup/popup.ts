@@ -14,16 +14,46 @@ function fillProviders(): void {
   });
 }
 
-function fillModels(providerId: ProviderId): void {
+function setModelOptions(models: string[]): void {
   const dl = $('models') as HTMLDataListElement;
   dl.innerHTML = '';
-  const p = getProvider(providerId);
-  p.suggestedModels.forEach((m) => {
+  models.forEach((m) => {
     const o = document.createElement('option');
     o.value = m;
     dl.appendChild(o);
   });
+}
+
+function currentSettings(): Settings {
+  const provider = ($('provider') as HTMLSelectElement).value as ProviderId;
+  return {
+    provider,
+    apiKey: ($('key') as HTMLInputElement).value.trim(),
+    model: ($('model') as HTMLInputElement).value.trim(),
+    enabled: ($('enabled') as HTMLInputElement).checked,
+    maxCropDim: 900,
+  };
+}
+
+// Populate static suggestions instantly, then replace with the live list.
+async function refreshModels(): Promise<void> {
+  const s = currentSettings();
+  const p = getProvider(s.provider);
+  setModelOptions(p.suggestedModels);
   $('keyHint').textContent = 'Key format: ' + p.keyHint;
+
+  setStatus('Loading models…');
+  try {
+    const models = await p.listModels(s);
+    if (models.length) {
+      setModelOptions(models);
+      setStatus(`${models.length} models available`);
+    } else {
+      setStatus('No models returned — using suggestions.');
+    }
+  } catch (e: any) {
+    setStatus(`Model list unavailable (${e?.message ?? e}) — using suggestions.`);
+  }
 }
 
 async function load(): Promise<void> {
@@ -31,32 +61,33 @@ async function load(): Promise<void> {
   const stored = (await chrome.storage.local.get('settings')).settings as Settings | undefined;
   const provider: ProviderId = stored?.provider ?? 'openrouter';
   ($('provider') as HTMLSelectElement).value = provider;
-  fillModels(provider);
   ($('key') as HTMLInputElement).value = stored?.apiKey ?? '';
   ($('model') as HTMLInputElement).value = stored?.model ?? getProvider(provider).defaultModel;
   ($('enabled') as HTMLInputElement).checked = stored?.enabled ?? true;
   await refreshStats();
+  void refreshModels();
 }
 
 async function save(): Promise<void> {
-  const provider = ($('provider') as HTMLSelectElement).value as ProviderId;
-  const settings: Settings = {
-    provider,
-    apiKey: ($('key') as HTMLInputElement).value.trim(),
-    model: ($('model') as HTMLInputElement).value.trim() || getProvider(provider).defaultModel,
-    enabled: ($('enabled') as HTMLInputElement).checked,
-    maxCropDim: 900,
-  };
-  await chrome.storage.local.set({ settings });
+  const s = currentSettings();
+  s.model = s.model || getProvider(s.provider).defaultModel;
+  await chrome.storage.local.set({ settings: s });
 }
 
 // Switching provider swaps model suggestions and resets the slug to that
-// provider's default (slugs are provider-specific and not interchangeable).
-function onProviderChange(): void {
+// provider's default (slugs are provider-specific and not interchangeable),
+// then refreshes the live model list.
+async function onProviderChange(): Promise<void> {
   const provider = ($('provider') as HTMLSelectElement).value as ProviderId;
-  fillModels(provider);
   ($('model') as HTMLInputElement).value = getProvider(provider).defaultModel;
-  void save();
+  await save();
+  await refreshModels();
+}
+
+// Entering / changing the key reloads the list (cloud lists need the key).
+async function onKeyChange(): Promise<void> {
+  await save();
+  await refreshModels();
 }
 
 function setStatus(msg: string): void {
@@ -97,7 +128,8 @@ async function refreshStats(): Promise<void> {
 
 // wire up
 $('provider').addEventListener('change', onProviderChange);
-(['key', 'model'] as const).forEach((id) => $(id).addEventListener('change', save));
+$('key').addEventListener('change', onKeyChange);
+$('model').addEventListener('change', save);
 $('enabled').addEventListener('change', save);
 $('draw').addEventListener('click', () => sendToTab('TOGGLE_DRAW'));
 $('reset').addEventListener('click', () => sendToTab('RESET_SCOPE'));
