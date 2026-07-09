@@ -16,10 +16,12 @@ Vision LLM (via OpenRouter) and caches everything so nothing is translated twice
   via an auto-built glossary fed back into the prompt.
 - **Overlay on the bubble** — the Thai text is drawn on top of the original bubble,
   auto-fit to the box. Hover a bubble to see the original; toggle all on/off.
-- **Pick your provider + model** — OpenRouter, OpenAI, Anthropic (Claude), or
-  Google Gemini direct. Choose in the popup; each ships a suggested-model list but
-  any vision model slug works. Default `OpenRouter · google/gemini-2.5-flash`
-  (cheap + fast + strong multilingual OCR).
+- **Pick your provider + model** — OpenRouter, OpenAI, Anthropic (Claude),
+  Google Gemini, or **Ollama (local, no key / no cost)**. Choose in the popup; each
+  ships a suggested-model list but any vision model slug works. Default
+  `OpenRouter · google/gemini-2.5-flash` (cheap + fast + strong multilingual OCR).
+  For Ollama, run a local vision model (`ollama run llama3.2-vision`) and start the
+  server with `OLLAMA_ORIGINS=*` so the extension can reach `localhost:11434`.
 - **Webtoon aware** — long vertical strips are tiled into fixed chunks and
   translated progressively as you scroll; paged manga uses the full scope box.
 

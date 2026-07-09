@@ -184,6 +184,13 @@ console.log('\n--- provider request builders ---');
   const gem20 = PROVIDERS.gemini.buildRequest(b64, prompt, mk('gemini', 'gemini-2.0-flash'));
   ok('gemini 2.0 omits thinkingConfig (would error)', (gem20.body as any).generationConfig.thinkingConfig === undefined);
 
+  const olm = PROVIDERS.ollama.buildRequest(b64, prompt, mk('ollama', 'llama3.2-vision'));
+  ok('ollama local url', olm.url.includes('localhost:11434/api/chat'));
+  ok('ollama needs no key', PROVIDERS.ollama.requiresKey === false);
+  ok('ollama raw base64 images (no data prefix)', (olm.body as any).messages[0].images[0] === b64);
+  ok('ollama forces json format', (olm.body as any).format === 'json');
+  ok('cloud providers require a key', PROVIDERS.openrouter.requiresKey && PROVIDERS.gemini.requiresKey);
+
   ok('unknown provider falls back to openrouter', getProvider('bogus' as any).id === 'openrouter');
 }
 

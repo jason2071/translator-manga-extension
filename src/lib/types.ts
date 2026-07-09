@@ -33,7 +33,7 @@ export interface ImageResult {
   ts: number;
 }
 
-export type ProviderId = 'openrouter' | 'openai' | 'anthropic' | 'gemini';
+export type ProviderId = 'openrouter' | 'openai' | 'anthropic' | 'gemini' | 'ollama';
 
 export interface Settings {
   provider: ProviderId;

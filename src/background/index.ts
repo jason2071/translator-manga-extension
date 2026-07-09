@@ -21,6 +21,7 @@ import {
   putTM,
 } from '../lib/cache';
 import { translateImage } from '../lib/openrouter';
+import { getProvider } from '../lib/providers';
 
 const DEFAULT_SETTINGS: Settings = {
   provider: 'openrouter',
@@ -139,7 +140,7 @@ async function handleTranslate(
     return { bubbles: l1.bubbles, cached: true };
   }
 
-  if (!settings.apiKey) return { error: 'NO_API_KEY' };
+  if (getProvider(settings.provider).requiresKey && !settings.apiKey) return { error: 'NO_API_KEY' };
 
   const release = await sem.acquire();
   try {

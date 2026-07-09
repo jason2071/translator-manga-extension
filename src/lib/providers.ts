@@ -16,6 +16,8 @@ export interface ProviderMeta {
   defaultModel: string;
   suggestedModels: string[];
   keyHint: string;
+  /** false for local providers (Ollama) that need no API key. */
+  requiresKey: boolean;
   buildRequest(base64Png: string, prompt: string, settings: Settings): ProviderRequest;
   extractContent(json: any): string;
 }
@@ -49,6 +51,7 @@ export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
       'openai/gpt-4o',
     ],
     keyHint: 'sk-or-v1-…  (openrouter.ai/keys)',
+    requiresKey: true,
     buildRequest: (b64, prompt, s) => ({
       url: 'https://openrouter.ai/api/v1/chat/completions',
       headers: {
@@ -74,6 +77,7 @@ export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
     defaultModel: 'gpt-4o-mini',
     suggestedModels: ['gpt-4o-mini', 'gpt-4o'],
     keyHint: 'sk-…  (platform.openai.com/api-keys)',
+    requiresKey: true,
     buildRequest: (b64, prompt, s) => ({
       url: 'https://api.openai.com/v1/chat/completions',
       headers: {
@@ -96,6 +100,7 @@ export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
     defaultModel: 'claude-3-5-haiku-latest',
     suggestedModels: ['claude-3-5-haiku-latest', 'claude-3-5-sonnet-latest'],
     keyHint: 'sk-ant-…  (console.anthropic.com)',
+    requiresKey: true,
     buildRequest: (b64, prompt, s) => ({
       url: 'https://api.anthropic.com/v1/messages',
       headers: {
@@ -134,6 +139,7 @@ export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
     defaultModel: 'gemini-2.5-flash',
     suggestedModels: ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'],
     keyHint: 'AIza…  (aistudio.google.com/apikey)',
+    requiresKey: true,
     buildRequest: (b64, prompt, s) => {
       const generationConfig: any = { responseMimeType: 'application/json', temperature: 0.2 };
       // thinkingConfig only exists on 2.5 models; sending it to 2.0 errors.
@@ -151,6 +157,28 @@ export const PROVIDERS: Record<ProviderId, ProviderMeta> = {
       const parts = json?.candidates?.[0]?.content?.parts;
       return Array.isArray(parts) ? parts.map((p: any) => p.text ?? '').join('') : '';
     },
+  },
+
+  ollama: {
+    id: 'ollama',
+    label: 'Ollama (local)',
+    defaultModel: 'llama3.2-vision',
+    suggestedModels: ['llama3.2-vision', 'llava', 'minicpm-v', 'qwen2.5vl'],
+    keyHint: 'no key — run Ollama locally; set OLLAMA_ORIGINS=* so the extension can reach it',
+    requiresKey: false,
+    buildRequest: (b64, prompt, s) => ({
+      // native chat endpoint: images are raw base64 (no data: prefix)
+      url: 'http://localhost:11434/api/chat',
+      headers: { 'Content-Type': 'application/json' },
+      body: {
+        model: s.model,
+        messages: [{ role: 'user', content: prompt, images: [b64] }],
+        stream: false,
+        format: 'json',
+        options: { temperature: 0.2 },
+      },
+    }),
+    extractContent: (json) => json?.message?.content ?? '',
   },
 };
 
