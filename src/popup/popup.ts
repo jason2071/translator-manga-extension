@@ -3,6 +3,11 @@ import { PROVIDERS, getProvider } from '../lib/providers';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
+const CUSTOM = '__custom__';
+
+// The currently chosen model slug (source of truth; select + custom input are views).
+let chosenModel = '';
+
 function fillProviders(): void {
   const sel = $('provider') as HTMLSelectElement;
   sel.innerHTML = '';
@@ -14,22 +19,46 @@ function fillProviders(): void {
   });
 }
 
+// Build the model <select> from `models`, keeping `chosenModel` selectable even
+// if the live list doesn't contain it, plus a "Custom…" escape hatch.
 function setModelOptions(models: string[]): void {
-  const dl = $('models') as HTMLDataListElement;
-  dl.innerHTML = '';
-  models.forEach((m) => {
+  const sel = $('modelSelect') as HTMLSelectElement;
+  const list = [...new Set(models)];
+  if (chosenModel && !list.includes(chosenModel)) list.unshift(chosenModel);
+
+  sel.innerHTML = '';
+  for (const m of list) {
     const o = document.createElement('option');
     o.value = m;
-    dl.appendChild(o);
-  });
+    o.textContent = m;
+    sel.appendChild(o);
+  }
+  const custom = document.createElement('option');
+  custom.value = CUSTOM;
+  custom.textContent = '✎ Custom model…';
+  sel.appendChild(custom);
+
+  sel.value = chosenModel && list.includes(chosenModel) ? chosenModel : list[0] ?? CUSTOM;
+  if (sel.value !== CUSTOM) chosenModel = sel.value;
+  syncCustomInput(false);
+}
+
+function syncCustomInput(focus: boolean): void {
+  const sel = $('modelSelect') as HTMLSelectElement;
+  const input = $('model') as HTMLInputElement;
+  const isCustom = sel.value === CUSTOM;
+  input.style.display = isCustom ? 'block' : 'none';
+  if (isCustom) {
+    input.value = chosenModel;
+    if (focus) input.focus();
+  }
 }
 
 function currentSettings(): Settings {
-  const provider = ($('provider') as HTMLSelectElement).value as ProviderId;
   return {
-    provider,
+    provider: ($('provider') as HTMLSelectElement).value as ProviderId,
     apiKey: ($('key') as HTMLInputElement).value.trim(),
-    model: ($('model') as HTMLInputElement).value.trim(),
+    model: chosenModel,
     enabled: ($('enabled') as HTMLInputElement).checked,
     maxCropDim: 900,
   };
@@ -62,7 +91,7 @@ async function load(): Promise<void> {
   const provider: ProviderId = stored?.provider ?? 'openrouter';
   ($('provider') as HTMLSelectElement).value = provider;
   ($('key') as HTMLInputElement).value = stored?.apiKey ?? '';
-  ($('model') as HTMLInputElement).value = stored?.model ?? getProvider(provider).defaultModel;
+  chosenModel = stored?.model ?? getProvider(provider).defaultModel;
   ($('enabled') as HTMLInputElement).checked = stored?.enabled ?? true;
   await refreshStats();
   void refreshModels();
@@ -71,20 +100,33 @@ async function load(): Promise<void> {
 async function save(): Promise<void> {
   const s = currentSettings();
   s.model = s.model || getProvider(s.provider).defaultModel;
+  chosenModel = s.model;
   await chrome.storage.local.set({ settings: s });
 }
 
-// Switching provider swaps model suggestions and resets the slug to that
-// provider's default (slugs are provider-specific and not interchangeable),
-// then refreshes the live model list.
 async function onProviderChange(): Promise<void> {
   const provider = ($('provider') as HTMLSelectElement).value as ProviderId;
-  ($('model') as HTMLInputElement).value = getProvider(provider).defaultModel;
+  chosenModel = getProvider(provider).defaultModel; // slugs are provider-specific
   await save();
   await refreshModels();
 }
 
-// Entering / changing the key reloads the list (cloud lists need the key).
+function onModelSelect(): void {
+  const sel = $('modelSelect') as HTMLSelectElement;
+  if (sel.value === CUSTOM) {
+    syncCustomInput(true);
+    return;
+  }
+  chosenModel = sel.value;
+  syncCustomInput(false);
+  void save();
+}
+
+function onCustomInput(): void {
+  chosenModel = ($('model') as HTMLInputElement).value.trim();
+  void save();
+}
+
 async function onKeyChange(): Promise<void> {
   await save();
   await refreshModels();
@@ -129,7 +171,8 @@ async function refreshStats(): Promise<void> {
 // wire up
 $('provider').addEventListener('change', onProviderChange);
 $('key').addEventListener('change', onKeyChange);
-$('model').addEventListener('change', save);
+$('modelSelect').addEventListener('change', onModelSelect);
+$('model').addEventListener('input', onCustomInput);
 $('enabled').addEventListener('change', save);
 $('draw').addEventListener('click', () => sendToTab('TOGGLE_DRAW'));
 $('reset').addEventListener('click', () => sendToTab('RESET_SCOPE'));

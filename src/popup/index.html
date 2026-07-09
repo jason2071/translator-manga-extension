@@ -100,10 +100,10 @@
     <input id="key" type="password" placeholder="paste key…" autocomplete="off" />
     <div class="hint" id="keyHint"></div>
 
-    <label for="model">Model</label>
-    <input id="model" type="text" list="models" placeholder="model slug…" autocomplete="off" />
-    <datalist id="models"></datalist>
-    <div class="hint">Pick a suggestion or type any vision model for this provider.</div>
+    <label for="modelSelect">Model</label>
+    <select id="modelSelect"></select>
+    <input id="model" type="text" placeholder="custom model slug…" autocomplete="off" style="display: none; margin-top: 6px" />
+    <div class="hint">Pick from the list, or choose “Custom” to type any vision model.</div>
 
     <div class="check">
       <input id="enabled" type="checkbox" />
